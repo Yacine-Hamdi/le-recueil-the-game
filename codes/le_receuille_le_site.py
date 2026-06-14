@@ -55,6 +55,16 @@ st.markdown("""
     margin-top: 10px;
 }
 
+.mobile-answer {
+    border-radius: 14px;
+    padding: 14px;
+    margin: 10px 0;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    border: 1px solid rgba(128,128,128,0.25);
+}
+
 .date-card {
     border-radius: 14px;
     padding: 12px;
@@ -117,7 +127,7 @@ def get_person_image_path(name, folder):
     return PLACEHOLDER_IMG
 
 
-def load_square_image(image_path, size=250):
+def load_square_image(image_path, size=200):
     img = Image.open(image_path).convert("RGBA")
 
     img.thumbnail((size, size), Image.LANCZOS)
@@ -190,6 +200,11 @@ page = st.sidebar.radio(
     ["🎮 Jeu", "📊 Stats"]
 )
 
+display_mode = st.sidebar.radio(
+    "Mode d'affichage",
+    ["🖥️ Mode PC", "📱 Mode mobile"]
+)
+
 
 # ============================================================
 # ONGLET JEU
@@ -247,41 +262,63 @@ if page == "🎮 Jeu":
 
             else:
 
-                author_img_path = get_person_image_path(
-                    row["auteur"],
-                    AUT_IMG_DIR
-                )
-
-                den_img_path = get_person_image_path(
-                    row["denonciateur"],
-                    DEN_IMG_DIR
-                )
-
-                author_img = load_square_image(author_img_path, size=250)
-                den_img = load_square_image(den_img_path, size=250)
-
                 st.markdown('<div class="reveal-block">', unsafe_allow_html=True)
 
-                col1, col2 = st.columns(2)
+                if display_mode == "🖥️ Mode PC":
 
-                with col1:
-                    st.image(author_img, width=250)
+                    author_img_path = get_person_image_path(
+                        row["auteur"],
+                        AUT_IMG_DIR
+                    )
+
+                    den_img_path = get_person_image_path(
+                        row["denonciateur"],
+                        DEN_IMG_DIR
+                    )
+
+                    author_img = load_square_image(author_img_path, size=200)
+                    den_img = load_square_image(den_img_path, size=200)
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.image(author_img, width=200)
+
+                        st.markdown(
+                            f"""
+                            <div class="person-label">
+                                👤 Auteur : {row['auteur']}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                    with col2:
+                        st.image(den_img, width=200)
+
+                        st.markdown(
+                            f"""
+                            <div class="person-label">
+                                📢 Dénonciateur : {row['denonciateur']}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                else:
 
                     st.markdown(
                         f"""
-                        <div class="person-label">
+                        <div class="mobile-answer">
                             👤 Auteur : {row['auteur']}
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
 
-                with col2:
-                    st.image(den_img, width=250)
-
                     st.markdown(
                         f"""
-                        <div class="person-label">
+                        <div class="mobile-answer">
                             📢 Dénonciateur : {row['denonciateur']}
                         </div>
                         """,
