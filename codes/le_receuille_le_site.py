@@ -4,8 +4,14 @@ from PIL import Image
 import pandas as pd
 import random
 import gspread
+import altair as alt
+import re
 from google.oauth2.service_account import Credentials
 from datetime import date
+
+# ============================================================
+# CONFIG PAGE
+# ============================================================
 
 st.set_page_config(
     page_title="THE GAME",
@@ -13,8 +19,13 @@ st.set_page_config(
     layout="centered"
 )
 
+# ============================================================
+# STYLE CSS
+# ============================================================
+
 st.markdown("""
 <style>
+
 .main-title {
     text-align: center;
     font-size: 46px;
@@ -29,12 +40,15 @@ st.markdown("""
     margin-bottom: 30px;
 }
 
-.quote-card {
+.quote-card, .date-card, .mobile-answer, .balance-card, .preview-card, .id-card, .stat-card {
     border-radius: 18px;
+    border: 1px solid rgba(128,128,128,0.25);
+}
+
+.quote-card {
     padding: 32px;
     margin: 25px 0;
     text-align: center;
-    border: 1px solid rgba(128,128,128,0.25);
 }
 
 .quote-text {
@@ -55,23 +69,86 @@ st.markdown("""
 }
 
 .mobile-answer {
-    border-radius: 14px;
     padding: 14px;
     margin: 10px 0;
     text-align: center;
     font-size: 18px;
     font-weight: 700;
-    border: 1px solid rgba(128,128,128,0.25);
 }
 
 .date-card {
-    border-radius: 14px;
     padding: 12px;
     margin: 20px 0;
     text-align: center;
     font-size: 22px;
     font-weight: 800;
-    border: 1px solid rgba(128,128,128,0.25);
+}
+
+.balance-card {
+    padding: 24px;
+    margin: 20px 0;
+}
+
+.preview-card {
+    padding: 20px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.preview-quote {
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.id-card {
+    padding: 24px;
+    margin: 20px 0;
+}
+
+.author-name {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 900;
+    margin-bottom: 10px;
+}
+
+.first-quote-label {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    opacity: 0.8;
+}
+
+.first-quote-text {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.35;
+    margin-top: 12px;
+}
+
+.first-quote-date {
+    text-align: center;
+    font-size: 16px;
+    opacity: 0.75;
+    margin-top: 10px;
+}
+
+.stat-card {
+    padding: 18px;
+    text-align: center;
+    margin: 8px 0;
+}
+
+.stat-value {
+    font-size: 30px;
+    font-weight: 900;
+}
+
+.stat-label {
+    font-size: 14px;
+    opacity: 0.75;
 }
 
 @keyframes fadeIn {
@@ -84,6 +161,7 @@ st.markdown("""
         transform: translateY(0);
     }
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -158,6 +236,75 @@ def load_square_image(image_path, size=200):
     canvas.paste(img, (x, y), img)
 
     return canvas
+
+
+# ============================================================
+# OUTILS STATS
+# ============================================================
+
+def make_bar_chart(data, x_col, y_col, title=None):
+    chart = (
+        alt.Chart(data)
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{x_col}:Q", title=None),
+            y=alt.Y(f"{y_col}:N", sort="-x", title=None),
+            tooltip=[y_col, x_col]
+        )
+        .properties(height=280, title=title)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def make_year_chart(data, year_col="annee", count_col="nb", title=None):
+    chart = (
+        alt.Chart(data)
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{year_col}:O", title="Année", sort=None),
+            y=alt.Y(f"{count_col}:Q", title="Nombre de citations"),
+            tooltip=[year_col, count_col]
+        )
+        .properties(height=280, title=title)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def get_top_words(texts, limit=15):
+    stopwords = {
+        "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
+        "le", "la", "les", "un", "une", "des", "du", "de", "d", "au", "aux",
+        "et", "ou", "mais", "donc", "or", "ni", "car",
+        "ce", "ces", "ça", "ca", "c", "est", "suis", "es", "sont", "être",
+        "a", "à", "ai", "as", "ont", "avoir",
+        "que", "qui", "quoi", "dont", "où", "pour", "par", "avec", "sans",
+        "dans", "sur", "sous", "en", "y",
+        "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
+        "moi", "toi", "lui", "leur", "leurs",
+        "pas", "plus", "moins", "très", "tres", "bien",
+        "ne", "n", "me", "te", "se", "m", "t", "s", "l"
+    }
+
+    words = []
+
+    for text in texts.dropna():
+        clean_text = str(text).lower()
+        clean_text = re.sub(r"[^a-zàâçéèêëîïôûùüÿñæœ\s'-]", " ", clean_text)
+        for word in clean_text.split():
+            word = word.strip("'- ")
+            if len(word) >= 3 and word not in stopwords:
+                words.append(word)
+
+    if not words:
+        return pd.DataFrame(columns=["mot", "nb"])
+
+    return (
+        pd.Series(words)
+        .value_counts()
+        .head(limit)
+        .reset_index()
+        .rename(columns={"index": "mot", "count": "nb"})
+    )
 
 
 # ============================================================
@@ -375,45 +522,87 @@ if page == "🎮 Jeu":
 
 elif page == "🗣️ Je balance":
 
-    st.title("🗣️ Je balance")
+    st.title("🗣️ Je balance une phrase")
 
-    st.write("Ajoute une nouvelle phrase directement dans le recueil.")
+    st.write("Ajoute une nouvelle citation directement dans le recueil.")
+
+    st.markdown('<div class="balance-card">', unsafe_allow_html=True)
 
     denonciateurs = sorted(df["denonciateur"].dropna().unique().tolist())
     auteurs = sorted(df["auteur"].dropna().unique().tolist())
 
+    st.markdown("### Moi,")
+
     denonciateur_choice = st.selectbox(
-        "Moi,",
-        denonciateurs + ["Autre"]
+        "Dénonciateur",
+        denonciateurs + ["Autre"],
+        label_visibility="collapsed"
     )
 
     if denonciateur_choice == "Autre":
-        denonciateur = st.text_input("Nouveau dénonciateur")
+        denonciateur = st.text_input(
+            "Nouveau dénonciateur",
+            placeholder="Entre le nom du dénonciateur"
+        )
     else:
         denonciateur = denonciateur_choice
 
+    st.markdown("### balance")
+
     auteur_choice = st.selectbox(
-        "balance",
-        auteurs + ["Autre"]
+        "Auteur",
+        auteurs + ["Autre"],
+        label_visibility="collapsed"
     )
 
     if auteur_choice == "Autre":
-        auteur = st.text_input("Nouvel auteur")
+        auteur = st.text_input(
+            "Nouvel auteur",
+            placeholder="Entre le nom de l'auteur"
+        )
     else:
         auteur = auteur_choice
 
+    st.markdown("### qui a dit :")
+
     citation = st.text_area(
-        "qui a dit",
-        placeholder="Écris la citation ici..."
+        "Citation",
+        placeholder="Écris la citation ici...",
+        label_visibility="collapsed"
     )
+
+    st.markdown("### le")
 
     date_citation = st.date_input(
-        "le",
+        "Date de la citation",
         value=date.today(),
-        format="DD/MM/YYYY"
+        format="DD/MM/YYYY",
+        label_visibility="collapsed"
     )
 
-    if st.button("✅ Ajouter la citation", use_container_width=True):
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if denonciateur and auteur and citation:
+        st.markdown(
+            f"""
+            <div class="preview-card">
+                <div>
+                    <strong>{denonciateur}</strong> balance <strong>{auteur}</strong>
+                </div>
+                <br>
+                <div class="preview-quote">
+                    “{citation}”
+                </div>
+                <br>
+                <div>
+                    le {date_citation.strftime("%d/%m/%Y")}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    if st.button("✅ Balancer la phrase", use_container_width=True):
 
         if not denonciateur or not auteur or not citation:
             st.error("Il manque au moins un champ : dénonciateur, auteur ou citation.")
@@ -434,8 +623,8 @@ elif page == "🗣️ Je balance":
 
             st.cache_data.clear()
 
-            st.success("Citation ajoutée au recueil ✅")
-            st.info("Elle sera disponible dans le jeu après actualisation ou nouvelle partie.")
+            st.success("Phrase balancée dans le recueil ✅")
+            st.info("Elle est maintenant disponible dans le jeu.")
 
 
 # ============================================================
@@ -444,30 +633,199 @@ elif page == "🗣️ Je balance":
 
 elif page == "📊 Stats":
 
-    st.title("📊 Statistiques")
+    st.title("📊 Archives du Recueil")
 
-    st.subheader("Auteurs les plus cités")
-
-    st.bar_chart(
-        df["auteur"]
-        .value_counts()
-        .sort_values(ascending=False)
-        .head(10)
+    stats_view = st.radio(
+        "Choisis une vue",
+        ["🌍 Vue globale", "🪪 Fiche auteur"],
+        horizontal=True
     )
 
-    st.subheader("Dénonciateurs les plus actifs")
+    if stats_view == "🌍 Vue globale":
 
-    st.bar_chart(
-        df["denonciateur"]
-        .value_counts()
-        .sort_values(ascending=False)
-        .head(10)
-    )
+        st.subheader("🌍 Vue globale du recueil")
 
-    st.subheader("Citations par année")
+        col1, col2, col3 = st.columns(3)
 
-    st.bar_chart(
-        df["annee"]
-        .value_counts()
-        .sort_index()
-    )
+        with col1:
+            st.metric("💬 Citations", len(df))
+
+        with col2:
+            st.metric("👤 Auteurs", df["auteur"].nunique())
+
+        with col3:
+            st.metric("📢 Dénonciateurs", df["denonciateur"].nunique())
+
+        st.markdown("---")
+
+        top_auteurs = (
+            df["auteur"]
+            .value_counts()
+            .reset_index()
+        )
+        top_auteurs.columns = ["auteur", "nb"]
+
+        top_denonciateurs = (
+            df["denonciateur"]
+            .value_counts()
+            .reset_index()
+        )
+        top_denonciateurs.columns = ["denonciateur", "nb"]
+
+        citations_par_annee = (
+            df["annee"]
+            .value_counts()
+            .reset_index()
+        )
+        citations_par_annee.columns = ["annee", "nb"]
+        citations_par_annee["annee"] = citations_par_annee["annee"].astype(str)
+        citations_par_annee = citations_par_annee.sort_values("annee")
+
+        make_bar_chart(
+            top_auteurs.head(15),
+            x_col="nb",
+            y_col="auteur",
+            title="Top auteurs"
+        )
+
+        make_bar_chart(
+            top_denonciateurs.head(15),
+            x_col="nb",
+            y_col="denonciateur",
+            title="Top dénonciateurs"
+        )
+
+        make_year_chart(
+            citations_par_annee,
+            year_col="annee",
+            count_col="nb",
+            title="Citations par année"
+        )
+
+    else:
+
+        auteurs = sorted(df["auteur"].dropna().unique().tolist())
+
+        selected_author = st.selectbox(
+            "Choisis un auteur",
+            auteurs
+        )
+
+        author_df = df[df["auteur"] == selected_author].copy()
+        author_df = author_df.sort_values("date_message")
+
+        first_row = author_df.iloc[0]
+        last_row = author_df.iloc[-1]
+
+        author_img_path = get_person_image_path(selected_author, AUT_IMG_DIR)
+        author_img = load_square_image(author_img_path, size=180)
+
+        st.markdown('<div class="id-card">', unsafe_allow_html=True)
+
+        col_photo, col_infos = st.columns([1, 2])
+
+        with col_photo:
+            st.image(author_img, width=180)
+
+        with col_infos:
+            st.markdown(
+                f"""
+                <div class="author-name">{selected_author}</div>
+                <div class="first-quote-label">
+                    Et voilà comment je suis arrivé là :
+                </div>
+                <div class="first-quote-text">
+                    “{first_row['citation']}”
+                </div>
+                <div class="first-quote-date">
+                    {first_row['date_complete']}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        main_denonciateur = (
+            author_df["denonciateur"].value_counts().idxmax()
+            if len(author_df) > 0
+            else "—"
+        )
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+        with kpi1:
+            st.metric("💬 Citations", len(author_df))
+
+        with kpi2:
+            st.metric("📢 Dénonciateurs", author_df["denonciateur"].nunique())
+
+        with kpi3:
+            st.metric("🕵️ Balanceur principal", main_denonciateur)
+
+        with kpi4:
+            st.metric("📅 Dernière apparition", last_row["date_complete"])
+
+        st.markdown("---")
+
+        graph1, graph2 = st.columns(2)
+
+        with graph1:
+            top_den_for_author = (
+                author_df["denonciateur"]
+                .value_counts()
+                .reset_index()
+            )
+            top_den_for_author.columns = ["denonciateur", "nb"]
+
+            make_bar_chart(
+                top_den_for_author.head(10),
+                x_col="nb",
+                y_col="denonciateur",
+                title="Qui me balance le plus ?"
+            )
+
+        with graph2:
+            author_by_year = (
+                author_df["annee"]
+                .value_counts()
+                .reset_index()
+            )
+            author_by_year.columns = ["annee", "nb"]
+            author_by_year["annee"] = author_by_year["annee"].astype(str)
+            author_by_year = author_by_year.sort_values("annee")
+
+            make_year_chart(
+                author_by_year,
+                year_col="annee",
+                count_col="nb",
+                title="Mes citations par année"
+            )
+
+        graph3, graph4 = st.columns(2)
+
+        with graph3:
+            top_words = get_top_words(author_df["citation"], limit=15)
+
+            if len(top_words) > 0:
+                make_bar_chart(
+                    top_words,
+                    x_col="nb",
+                    y_col="mot",
+                    title="Mes mots les plus fréquents"
+                )
+            else:
+                st.info("Pas assez de texte pour afficher les mots fréquents.")
+
+        with graph4:
+            st.subheader("Toutes mes citations")
+            st.dataframe(
+                author_df[["date_complete", "denonciateur", "citation"]]
+                .rename(columns={
+                    "date_complete": "Date",
+                    "denonciateur": "Dénonciateur",
+                    "citation": "Citation"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
