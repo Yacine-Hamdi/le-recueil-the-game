@@ -139,16 +139,20 @@ st.markdown("""
     padding: 18px;
     text-align: center;
     margin: 8px 0;
+    min-height: 105px;
 }
 
 .stat-value {
-    font-size: 30px;
+    font-size: 20px;
     font-weight: 900;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 .stat-label {
     font-size: 14px;
     opacity: 0.75;
+    margin-bottom: 8px;
 }
 
 @keyframes fadeIn {
@@ -755,16 +759,48 @@ elif page == "📊 Stats":
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
         with kpi1:
-            st.metric("💬 Citations", len(author_df))
+            st.markdown(
+                f"""
+                <div class="stat-card">
+                    <div class="stat-label">💬 Citations</div>
+                    <div class="stat-value">{len(author_df)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         with kpi2:
-            st.metric("📢 Dénonciateurs", author_df["denonciateur"].nunique())
+            st.markdown(
+                f"""
+                <div class="stat-card">
+                    <div class="stat-label">📢 Dénonciateurs</div>
+                    <div class="stat-value">{author_df['denonciateur'].nunique()}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         with kpi3:
-            st.metric("🕵️ Balanceur principal", main_denonciateur)
+            st.markdown(
+                f"""
+                <div class="stat-card">
+                    <div class="stat-label">🕵️ Balanceur principal</div>
+                    <div class="stat-value">{main_denonciateur}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         with kpi4:
-            st.metric("📅 Dernière apparition", last_row["date_complete"])
+            st.markdown(
+                f"""
+                <div class="stat-card">
+                    <div class="stat-label">📅 Dernière apparition</div>
+                    <div class="stat-value">{last_row['date_complete']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         st.markdown("---")
 
