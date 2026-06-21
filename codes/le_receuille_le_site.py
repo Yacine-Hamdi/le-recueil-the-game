@@ -731,12 +731,31 @@ elif page == "📚 Recueil":
         })
     )
 
-    st.dataframe(
+    st.data_editor(
         recueil_table,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        disabled=True,
+        height=500,
+        column_config={
+            "Citation": st.column_config.TextColumn(
+                "Citation",
+                width="large"
+            ),
+            "Auteur": st.column_config.TextColumn(
+                "Auteur",
+                width="small"
+            ),
+            "Dénonciateur": st.column_config.TextColumn(
+                "Dénonciateur",
+                width="small"
+            ),
+            "Date": st.column_config.TextColumn(
+                "Date",
+                width="small"
+            ),
+        }
     )
-
 
 # ============================================================
 # ONGLET STATS
