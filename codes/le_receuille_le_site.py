@@ -247,16 +247,24 @@ def load_square_image(image_path, size=200):
 # ============================================================
 
 def make_bar_chart(data, x_col, y_col, title=None):
+    chart_height = max(320, len(data) * 35)
+
     chart = (
         alt.Chart(data)
         .mark_bar()
         .encode(
             x=alt.X(f"{x_col}:Q", title=None),
-            y=alt.Y(f"{y_col}:N", sort="-x", title=None),
+            y=alt.Y(
+                f"{y_col}:N",
+                sort="-x",
+                title=None,
+                axis=alt.Axis(labelLimit=220, labelFontSize=12)
+            ),
             tooltip=[y_col, x_col]
         )
-        .properties(height=280, title=title)
+        .properties(height=chart_height, title=title)
     )
+
     st.altair_chart(chart, use_container_width=True)
 
 
@@ -271,44 +279,69 @@ def make_year_chart(data, year_col="annee", count_col="nb", title=None):
         )
         .properties(height=280, title=title)
     )
+
     st.altair_chart(chart, use_container_width=True)
 
 
 def get_top_words(texts, limit=15):
     stopwords = {
-        "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
+        "je", "j", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
         "le", "la", "les", "un", "une", "des", "du", "de", "d", "au", "aux",
         "et", "ou", "mais", "donc", "or", "ni", "car",
-        "ce", "ces", "ça", "ca", "c", "est", "suis", "es", "sont", "être",
+        "ce", "ces", "cet", "cette", "ça", "ca", "c",
+        "est", "suis", "es", "sont", "etre", "être",
         "a", "à", "ai", "as", "ont", "avoir",
         "que", "qui", "quoi", "dont", "où", "pour", "par", "avec", "sans",
         "dans", "sur", "sous", "en", "y",
         "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
         "moi", "toi", "lui", "leur", "leurs",
         "pas", "plus", "moins", "très", "tres", "bien",
-        "ne", "n", "me", "te", "se", "m", "t", "s", "l"
+        "ne", "n", "me", "te", "se", "m", "t", "s", "l",
+        "cest", "c'est", "jai", "j'ai", "peut", "peux", "peu",
+        "fait", "faire", "faut", "vais", "veux", "veut",
+        "dire", "dit", "quand", "comme", "alors", "tout",
+        "tous", "toute", "toutes", "bah", "hein", "genre",
+        "non", "oui", "bon", "ben", "bah", "voilà", "voila",
+        "là", "la", "ici", "même", "meme", "juste",
+        "être", "etre", "avoir", "aller", "va", "vas",
+        "ça", "ca", "cest", "c'est", "qu", "quand",
+        "si", "du", "des", "dans", "parce", "parceque"
     }
 
     words = []
 
     for text in texts.dropna():
         clean_text = str(text).lower()
+
+        clean_text = clean_text.replace("j’ai", "jai")
+        clean_text = clean_text.replace("j'ai", "jai")
+        clean_text = clean_text.replace("c’est", "cest")
+        clean_text = clean_text.replace("c'est", "cest")
+        clean_text = clean_text.replace("qu’il", "quil")
+        clean_text = clean_text.replace("qu'elle", "quelle")
+        clean_text = clean_text.replace("qu’elle", "quelle")
+
         clean_text = re.sub(r"[^a-zàâçéèêëîïôûùüÿñæœ\s'-]", " ", clean_text)
+
         for word in clean_text.split():
             word = word.strip("'- ")
+
             if len(word) >= 3 and word not in stopwords:
                 words.append(word)
 
     if not words:
         return pd.DataFrame(columns=["mot", "nb"])
 
-    return (
+    top_words = (
         pd.Series(words)
         .value_counts()
         .head(limit)
         .reset_index()
-        .rename(columns={"index": "mot", "count": "nb"})
     )
+
+    top_words.columns = ["mot", "nb"]
+
+    return top_words
 
 
 # ============================================================
@@ -856,11 +889,11 @@ elif page == "📊 Stats":
         with graph4:
             st.subheader("Toutes mes citations")
             st.dataframe(
-                author_df[["date_complete", "denonciateur", "citation"]]
+                author_df[["citation", "date_complete", "denonciateur"]]
                 .rename(columns={
+                    "citation": "Citation",
                     "date_complete": "Date",
-                    "denonciateur": "Dénonciateur",
-                    "citation": "Citation"
+                    "denonciateur": "Dénonciateur"
                 }),
                 use_container_width=True,
                 hide_index=True
