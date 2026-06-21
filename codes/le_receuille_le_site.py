@@ -7,7 +7,8 @@ import gspread
 import altair as alt
 import re
 from google.oauth2.service_account import Credentials
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 # ============================================================
 # CONFIG PAGE
@@ -305,7 +306,14 @@ def get_top_words(texts, limit=15):
         "là", "la", "ici", "même", "meme", "juste",
         "être", "etre", "avoir", "aller", "va", "vas",
         "ça", "ca", "cest", "c'est", "qu", "quand",
-        "si", "du", "des", "dans", "parce", "parceque"
+        "si", "du", "des", "dans", "parce", "parceque", "aussi",
+        "alors", "donc", "mais", "ou", "ni", "car", "qu'il", "qu'elle", "qu'ils", "qu'elles",
+        "sais", "sait", "savent", "savoir", "veux", "veut", "vont", "vais",
+        "faut", "falloir", "peut", "peux", "peuvent", "peut-être", "peutetre", "peutetre", "peut-etre","fais", 
+        "fait", "font", "faire", "dis", "dit", "disent", "dire","j'en", "y'a", 
+        "quelqu'un", "quelqu'une", "quelqu'unes", "quelqu'uns", "quelques", "quelque", "quelqu'","c'était",
+        "était", "étaient", "étant", "étée", "étées", "étés", "être", "tant", "l'ai", "l'as", "l'ont",
+        "l'avons", "l'avez", "l'ont", "l'a", "l'as", "l'ont", "l'avons", "l'avez",
     }
 
     words = []
@@ -398,7 +406,7 @@ st.sidebar.title("📌 Menu")
 
 page = st.sidebar.radio(
     "Navigation",
-    ["🎮 Jeu", "🗣️ Je balance", "📊 Stats"]
+    ["🎮 Jeu", "🗣️ Je balance", "📚 Recueil", "📊 Stats"]
 )
 
 display_mode = st.sidebar.radio(
@@ -647,9 +655,11 @@ elif page == "🗣️ Je balance":
         else:
             worksheet = get_worksheet()
 
+            heure_ajout = datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M:%S")
+
             new_row = [
                 date_citation.strftime("%Y-%m-%d"),
-                "00:00:00",
+                heure_ajout,
                 denonciateur.strip(),
                 citation.strip(),
                 auteur.strip(),
@@ -662,6 +672,70 @@ elif page == "🗣️ Je balance":
 
             st.success("Phrase balancée dans le recueil ✅")
             st.info("Elle est maintenant disponible dans le jeu.")
+
+
+# ============================================================
+# ONGLET RECUEIL
+# ============================================================
+
+elif page == "📚 Recueil":
+
+    st.title("📚 Recueil complet")
+
+    st.write("Consulte toutes les citations du recueil.")
+
+    filtered_df = df.copy()
+
+    auteurs = sorted(filtered_df["auteur"].dropna().unique().tolist())
+    denonciateurs = sorted(filtered_df["denonciateur"].dropna().unique().tolist())
+    annees = sorted(filtered_df["annee"].dropna().astype(str).unique().tolist())
+
+    col_filter1, col_filter2, col_filter3 = st.columns(3)
+
+    with col_filter1:
+        selected_auteurs = st.multiselect(
+            "Auteurs",
+            auteurs
+        )
+
+    with col_filter2:
+        selected_denonciateurs = st.multiselect(
+            "Dénonciateurs",
+            denonciateurs
+        )
+
+    with col_filter3:
+        selected_annees = st.multiselect(
+            "Années",
+            annees
+        )
+
+    if selected_auteurs:
+        filtered_df = filtered_df[filtered_df["auteur"].isin(selected_auteurs)]
+
+    if selected_denonciateurs:
+        filtered_df = filtered_df[filtered_df["denonciateur"].isin(selected_denonciateurs)]
+
+    if selected_annees:
+        filtered_df = filtered_df[filtered_df["annee"].astype(str).isin(selected_annees)]
+
+    st.caption(f"{len(filtered_df)} citation(s) affichée(s)")
+
+    recueil_table = (
+        filtered_df[["citation", "auteur", "denonciateur", "date_complete"]]
+        .rename(columns={
+            "citation": "Citation",
+            "auteur": "Auteur",
+            "denonciateur": "Dénonciateur",
+            "date_complete": "Date"
+        })
+    )
+
+    st.dataframe(
+        recueil_table,
+        use_container_width=True,
+        hide_index=True
+    )
 
 
 # ============================================================
