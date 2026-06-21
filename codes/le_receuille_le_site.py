@@ -3,19 +3,18 @@ from pathlib import Path
 from PIL import Image
 import pandas as pd
 import random
-import json
+import gspread
+from google.oauth2.service_account import Credentials
+from datetime import date
 
-# --- Configuration page ---
 st.set_page_config(
     page_title="THE GAME",
     page_icon="🎲",
     layout="centered"
 )
 
-# --- Style CSS ---
 st.markdown("""
 <style>
-
 .main-title {
     text-align: center;
     font-size: 46px;
@@ -85,38 +84,58 @@ st.markdown("""
         transform: translateY(0);
     }
 }
-
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CHEMINS
+# CONFIG GOOGLE SHEETS
+# ============================================================
+
+SHEET_ID = "1d2NR7tnlHcyeAWEKgvdoMAbebPwGxaUcXVj41DAgJjI"
+WORKSHEET_NAME = "citations"
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+
+def get_worksheet():
+    credentials = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPES
+    )
+    client = gspread.authorize(credentials)
+    spreadsheet = client.open_by_key(SHEET_ID)
+    return spreadsheet.worksheet(WORKSHEET_NAME)
+
+
+@st.cache_data(ttl=60)
+def load_data_from_sheet():
+    worksheet = get_worksheet()
+    records = worksheet.get_all_records()
+    df = pd.DataFrame(records)
+
+    df["date_message"] = pd.to_datetime(df["date_message"], errors="coerce")
+    df["date_complete"] = df["date_message"].dt.strftime("%d/%m/%Y")
+    df["annee"] = df["annee"].astype(str)
+
+    return df
+
+
+df = load_data_from_sheet()
+
+# ============================================================
+# CHEMINS IMAGES
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-JSON_PATH = BASE_DIR / "donnees" / "citations_clean.json"
 
 IMG_DIR = BASE_DIR / "img_png"
 AUT_IMG_DIR = IMG_DIR / "aut_png"
 DEN_IMG_DIR = IMG_DIR / "den_png"
 PLACEHOLDER_IMG = IMG_DIR / "Placeholder.png"
 
-# ============================================================
-# CHARGEMENT DES DONNÉES
-# ============================================================
-
-with open(JSON_PATH, "r", encoding="utf-8") as f:
-    data = json.load(f)
-
-df = pd.DataFrame(data)
-
-df["date_message"] = pd.to_datetime(df["date_message"], unit="ms")
-df["date_complete"] = df["date_message"].dt.strftime("%d/%m/%Y")
-
-# ============================================================
-# GESTION DES IMAGES
-# ============================================================
 
 def get_person_image_path(name, folder):
     image_path = folder / f"{name}.png"
@@ -129,7 +148,6 @@ def get_person_image_path(name, folder):
 
 def load_square_image(image_path, size=200):
     img = Image.open(image_path).convert("RGBA")
-
     img.thumbnail((size, size), Image.LANCZOS)
 
     canvas = Image.new("RGBA", (size, size), (255, 255, 255, 0))
@@ -160,7 +178,7 @@ if "game_started" not in st.session_state:
 
 
 # ============================================================
-# FONCTIONS
+# FONCTIONS JEU
 # ============================================================
 
 def pick_new_quote():
@@ -174,7 +192,6 @@ def pick_new_quote():
 
         st.session_state.current_index = new_index
         st.session_state.used_indexes.append(new_index)
-
         st.session_state.reveal = False
         st.session_state.game_started = True
 
@@ -190,14 +207,14 @@ def reset_game():
 
 
 # ============================================================
-# NAVIGATION
+# SIDEBAR
 # ============================================================
 
 st.sidebar.title("📌 Menu")
 
 page = st.sidebar.radio(
     "Navigation",
-    ["🎮 Jeu", "📊 Stats"]
+    ["🎮 Jeu", "🗣️ Je balance", "📊 Stats"]
 )
 
 display_mode = st.sidebar.radio(
@@ -343,15 +360,82 @@ if page == "🎮 Jeu":
                         st.rerun()
 
                 else:
-                    st.warning(
-                        "Toutes les citations ont été jouées !"
-                    )
+                    st.warning("Toutes les citations ont été jouées !")
 
         st.markdown("---")
 
         if st.button("🔄 Recommencer la partie", use_container_width=True):
             reset_game()
             st.rerun()
+
+
+# ============================================================
+# ONGLET JE BALANCE
+# ============================================================
+
+elif page == "🗣️ Je balance":
+
+    st.title("🗣️ Je balance")
+
+    st.write("Ajoute une nouvelle phrase directement dans le recueil.")
+
+    denonciateurs = sorted(df["denonciateur"].dropna().unique().tolist())
+    auteurs = sorted(df["auteur"].dropna().unique().tolist())
+
+    denonciateur_choice = st.selectbox(
+        "Moi,",
+        denonciateurs + ["Autre"]
+    )
+
+    if denonciateur_choice == "Autre":
+        denonciateur = st.text_input("Nouveau dénonciateur")
+    else:
+        denonciateur = denonciateur_choice
+
+    auteur_choice = st.selectbox(
+        "balance",
+        auteurs + ["Autre"]
+    )
+
+    if auteur_choice == "Autre":
+        auteur = st.text_input("Nouvel auteur")
+    else:
+        auteur = auteur_choice
+
+    citation = st.text_area(
+        "qui a dit",
+        placeholder="Écris la citation ici..."
+    )
+
+    date_citation = st.date_input(
+        "le",
+        value=date.today(),
+        format="DD/MM/YYYY"
+    )
+
+    if st.button("✅ Ajouter la citation", use_container_width=True):
+
+        if not denonciateur or not auteur or not citation:
+            st.error("Il manque au moins un champ : dénonciateur, auteur ou citation.")
+
+        else:
+            worksheet = get_worksheet()
+
+            new_row = [
+                date_citation.strftime("%Y-%m-%d"),
+                "00:00:00",
+                denonciateur.strip(),
+                citation.strip(),
+                auteur.strip(),
+                date_citation.year
+            ]
+
+            worksheet.append_row(new_row)
+
+            st.cache_data.clear()
+
+            st.success("Citation ajoutée au recueil ✅")
+            st.info("Elle sera disponible dans le jeu après actualisation ou nouvelle partie.")
 
 
 # ============================================================
